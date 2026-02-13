@@ -1,31 +1,3 @@
-var EXTENSION_OPTIONS = [
-  {
-    label: 'Split Payments',
-    value: 'splitpayments',
-    description: 'Signs zap requests when splitting payments to LNURL targets'
-  },
-  {
-    label: 'LNURLp',
-    value: 'lnurlp',
-    description: 'Signs zap receipts for incoming Lightning payments'
-  },
-  {
-    label: 'CyberHerd Messaging',
-    value: 'cyberherd_messaging',
-    description: 'Signs Nostr notes and replies for CyberHerd events'
-  },
-  {
-    label: 'CyberHerd',
-    value: 'cyberherd',
-    description: 'Tracks Nostr engagement for the CyberHerd extension'
-  },
-  {
-    label: 'Nostr Client',
-    value: 'nostrclient',
-    description: 'General-purpose Nostr client for notes and DMs'
-  }
-]
-
 var KIND_OPTIONS = [
   {label: 'Kind 0 - Profile Metadata', value: 0, sensitive: true,
     description: 'Updates your Nostr profile (name, picture, about). Sensitive: changes your public identity.'},
@@ -68,6 +40,7 @@ window.app = Vue.createApp({
       this.getKeys()
       this.getPermissions()
       this.getLogs()
+      this.discoverExtensions()
     }
   },
   data() {
@@ -76,10 +49,11 @@ window.app = Vue.createApp({
       keys: [],
       permissions: [],
       logs: [],
+      discoveredExtensions: [],
+      extensionOptions: [],
       newKeyInput: '',
       showPermDialog: false,
       showEditPermDialog: false,
-      extensionOptions: EXTENSION_OPTIONS,
       kindOptions: KIND_OPTIONS,
       permForm: {
         key_id: null,
@@ -115,11 +89,7 @@ window.app = Vue.createApp({
           name: 'extension_id',
           label: 'Extension',
           field: 'extension_id',
-          align: 'left',
-          format: val => {
-            var opt = EXTENSION_OPTIONS.find(e => e.value === val)
-            return opt ? opt.label : val
-          }
+          align: 'left'
         },
         {
           name: 'kind',
@@ -153,11 +123,7 @@ window.app = Vue.createApp({
           name: 'extension_id',
           label: 'Extension',
           field: 'extension_id',
-          align: 'left',
-          format: val => {
-            var opt = EXTENSION_OPTIONS.find(e => e.value === val)
-            return opt ? opt.label : val
-          }
+          align: 'left'
         },
         {
           name: 'kind',
@@ -192,7 +158,7 @@ window.app = Vue.createApp({
     },
     selectedExtDescription() {
       if (!this.permForm.extension_id) return ''
-      var e = EXTENSION_OPTIONS.find(
+      var e = this.extensionOptions.find(
         o => o.value === this.permForm.extension_id
       )
       return e ? e.description : ''
@@ -207,6 +173,68 @@ window.app = Vue.createApp({
       navigator.clipboard.writeText(text).then(() => {
         Quasar.Notify.create({message: 'Copied!', timeout: 500})
       })
+    },
+    extName(extId) {
+      var ext = this.discoveredExtensions.find(e => e.extension_id === extId)
+      return ext ? ext.extension_name : extId
+    },
+
+    // --- Discovery ---
+    discoverExtensions() {
+      LNbits.api
+        .request(
+          'GET',
+          '/nsecbunker/api/v1/discover',
+          this.selectedWallet.adminkey
+        )
+        .then(response => {
+          this.discoveredExtensions = response.data
+          this.extensionOptions = response.data.map(ext => ({
+            label: ext.extension_name,
+            value: ext.extension_id,
+            description: ext.requirements.map(r => r.description).join(' ')
+          }))
+        })
+        .catch(err => {
+          LNbits.utils.notifyApiError(err)
+        })
+    },
+    quickSetup(extId) {
+      if (this.keys.length === 0) return
+      var keyId = this.keys[0].id
+      LNbits.api
+        .request(
+          'POST',
+          '/nsecbunker/api/v1/quick-setup',
+          this.selectedWallet.adminkey,
+          {
+            extension_id: extId,
+            key_id: keyId,
+            use_recommended_limits: true
+          }
+        )
+        .then(response => {
+          var count = response.data.length
+          this.getPermissions()
+          this.discoverExtensions()
+          if (count > 0) {
+            Quasar.Notify.create({
+              message: count + ' permission(s) granted.',
+              timeout: 1500
+            })
+          } else {
+            Quasar.Notify.create({
+              message: 'All permissions already granted.',
+              timeout: 1000
+            })
+          }
+        })
+        .catch(err => {
+          LNbits.utils.notifyApiError(err)
+        })
+    },
+    allGranted(ext) {
+      return ext.requirements.every(r => r.already_granted)
     },
 
     // --- Keys ---
@@ -337,6 +365,7 @@ window.app = Vue.createApp({
             rate_limit_seconds: null
           }
           this.getPermissions()
+          this.discoverExtensions()
           Quasar.Notify.create({
             message: 'Permission granted.',
             timeout: 700
@@ -387,6 +416,7 @@ window.app = Vue.createApp({
           )
           .then(() => {
             this.getPermissions()
+            this.discoverExtensions()
             Quasar.Notify.create({
               message: 'Permission revoked.',
               timeout: 700

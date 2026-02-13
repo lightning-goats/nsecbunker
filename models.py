@@ -49,6 +49,12 @@ class UpdatePermissionData(BaseModel):
     rate_limit_seconds: Optional[int] = None
 
 
+class QuickSetupData(BaseModel):
+    extension_id: str
+    key_id: str
+    use_recommended_limits: bool = True
+
+
 class SignEventData(BaseModel):
     extension_id: str
     event: dict

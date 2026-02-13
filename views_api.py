@@ -17,12 +17,14 @@ from .crud import (
     get_signing_logs,
     update_permission,
 )
+from .discovery import discover_signing_requirements
 from .helpers import parse_nostr_private_key
 from .models import (
     BunkerKey,
     BunkerPermission,
     CreateKeyData,
     CreatePermissionData,
+    QuickSetupData,
     SignEventData,
     SigningLog,
     UpdatePermissionData,
@@ -140,6 +142,90 @@ async def api_delete_permission(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> None:
     await delete_permission(perm_id)
+
+
+# --- Discovery & Quick Setup ---
+
+
+@nsecbunker_api_router.get("/api/v1/discover")
+async def api_discover(
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+) -> list[dict]:
+    discovered = discover_signing_requirements()
+    existing = await get_permissions(wallet.wallet.id)
+
+    granted_set = {
+        (p.extension_id, p.kind) for p in existing
+    }
+
+    result = []
+    for ext in discovered:
+        reqs = []
+        for req in ext.requirements:
+            reqs.append({
+                "kind": req.kind,
+                "kind_label": req.kind_label,
+                "description": req.description,
+                "required": req.required,
+                "recommended_rate_limit": (
+                    req.recommended_rate_limit.dict()
+                    if req.recommended_rate_limit
+                    else None
+                ),
+                "already_granted": (ext.extension_id, req.kind) in granted_set,
+            })
+        result.append({
+            "extension_id": ext.extension_id,
+            "extension_name": ext.extension_name,
+            "requirements": reqs,
+        })
+    return result
+
+
+@nsecbunker_api_router.post(
+    "/api/v1/quick-setup", status_code=HTTPStatus.CREATED
+)
+async def api_quick_setup(
+    data: QuickSetupData,
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+) -> list[BunkerPermission]:
+    discovered = discover_signing_requirements()
+    ext_info = next(
+        (e for e in discovered if e.extension_id == data.extension_id), None
+    )
+    if not ext_info:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"No signing requirements found for '{data.extension_id}'.",
+        )
+
+    existing = await get_permissions(wallet.wallet.id)
+    granted_set = {
+        (p.extension_id, p.kind) for p in existing if p.key_id == data.key_id
+    }
+
+    created: list[BunkerPermission] = []
+    for req in ext_info.requirements:
+        if (data.extension_id, req.kind) in granted_set:
+            continue
+
+        rate_count = None
+        rate_seconds = None
+        if data.use_recommended_limits and req.recommended_rate_limit:
+            rate_count = req.recommended_rate_limit.count
+            rate_seconds = req.recommended_rate_limit.seconds
+
+        perm_data = CreatePermissionData(
+            extension_id=data.extension_id,
+            key_id=data.key_id,
+            kind=req.kind,
+            rate_limit_count=rate_count,
+            rate_limit_seconds=rate_seconds,
+        )
+        perm = await create_permission(wallet.wallet.id, perm_data)
+        created.append(perm)
+
+    return created
 
 
 # --- Sign ---

@@ -101,6 +101,84 @@
       </q-card-section>
     </q-card>
 
+    <!-- Quick Setup Card -->
+    <q-card class="q-pa-sm" v-if="discoveredExtensions.length > 0">
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Quick Setup</h5>
+            <div class="text-caption text-grey">
+              Extensions that declare Nostr signing requirements.
+              Grant all needed permissions with one click.
+            </div>
+          </div>
+          <div>
+            <q-btn
+              flat
+              dense
+              icon="refresh"
+              @click="discoverExtensions()"
+            >
+              <q-tooltip>Rescan extensions</q-tooltip>
+            </q-btn>
+          </div>
+        </div>
+
+        <div v-if="keys.length === 0" class="text-caption text-warning q-mb-md">
+          Generate or import a key first before granting permissions.
+        </div>
+
+        <div class="row q-col-gutter-sm">
+          <div
+            v-for="ext in discoveredExtensions"
+            :key="ext.extension_id"
+            class="col-12 col-sm-6 col-md-4"
+          >
+            <q-card flat bordered class="full-height">
+              <q-card-section class="q-pb-xs">
+                <div class="text-subtitle2" v-text="ext.extension_name"></div>
+                <div class="text-caption text-grey" v-text="ext.extension_id"></div>
+              </q-card-section>
+              <q-card-section class="q-pt-xs q-pb-sm">
+                <div
+                  v-for="req in ext.requirements"
+                  :key="req.kind"
+                  class="row items-center no-wrap q-mb-xs"
+                >
+                  <q-icon
+                    :name="req.already_granted ? 'check_circle' : 'radio_button_unchecked'"
+                    :color="req.already_granted ? 'positive' : 'grey'"
+                    size="xs"
+                    class="q-mr-sm"
+                  ></q-icon>
+                  <div>
+                    <span class="text-caption" v-text="req.kind_label"></span>
+                    <span class="text-caption text-grey" v-text="' (kind ' + req.kind + ')'"></span>
+                  </div>
+                </div>
+              </q-card-section>
+              <q-card-actions>
+                <q-btn
+                  v-if="!allGranted(ext)"
+                  unelevated
+                  dense
+                  color="primary"
+                  label="Grant All"
+                  size="sm"
+                  @click="quickSetup(ext.extension_id)"
+                  :disabled="keys.length === 0"
+                ></q-btn>
+                <span
+                  v-else
+                  class="text-positive text-caption q-ml-sm"
+                >All granted</span>
+              </q-card-actions>
+            </q-card>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+
     <!-- Permissions Card -->
     <q-card class="q-pa-sm">
       <q-card-section>
@@ -128,6 +206,11 @@
           row-key="id"
           no-data-label="No permissions granted yet."
         >
+          <template v-slot:body-cell-extension_id="props">
+            <q-td :props="props">
+              <span v-text="extName(props.row.extension_id)"></span>
+            </q-td>
+          </template>
           <template v-slot:body-cell-rate_limit="props">
             <q-td :props="props">
               <span
@@ -189,6 +272,11 @@
           row-key="id"
           no-data-label="No signing activity yet."
         >
+          <template v-slot:body-cell-extension_id="props">
+            <q-td :props="props">
+              <span v-text="extName(props.row.extension_id)"></span>
+            </q-td>
+          </template>
           <template v-slot:body-cell-event_id="props">
             <q-td :props="props">
               <span class="text-caption" v-text="shortKey(props.row.event_id)"></span>
