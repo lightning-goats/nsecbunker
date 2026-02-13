@@ -51,8 +51,8 @@
         >
           <template v-slot:body-cell-pubkey_hex="props">
             <q-td :props="props">
-              <span class="text-caption">{{ shortKey(props.row.pubkey_hex) }}</span>
-              <q-tooltip>{{ props.row.pubkey_hex }}</q-tooltip>
+              <span class="text-caption" v-text="shortKey(props.row.pubkey_hex)"></span>
+              <q-tooltip v-text="props.row.pubkey_hex"></q-tooltip>
             </q-td>
           </template>
           <template v-slot:body-cell-actions="props">
@@ -111,9 +111,10 @@
         >
           <template v-slot:body-cell-rate_limit="props">
             <q-td :props="props">
-              <span v-if="props.row.rate_limit_count && props.row.rate_limit_seconds">
-                {{ props.row.rate_limit_count }} / {{ props.row.rate_limit_seconds }}s
-              </span>
+              <span
+                v-if="props.row.rate_limit_count && props.row.rate_limit_seconds"
+                v-text="props.row.rate_limit_count + ' / ' + props.row.rate_limit_seconds + 's'"
+              ></span>
               <span v-else class="text-grey">Unlimited</span>
             </q-td>
           </template>
@@ -171,8 +172,8 @@
         >
           <template v-slot:body-cell-event_id="props">
             <q-td :props="props">
-              <span class="text-caption">{{ shortKey(props.row.event_id) }}</span>
-              <q-tooltip>{{ props.row.event_id }}</q-tooltip>
+              <span class="text-caption" v-text="shortKey(props.row.event_id)"></span>
+              <q-tooltip v-text="props.row.event_id"></q-tooltip>
             </q-td>
           </template>
         </q-table>
