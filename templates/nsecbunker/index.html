@@ -1,0 +1,319 @@
+{% extends "base.html" %} {% from "macros.jinja" import window_vars with context
+%} {% block page %}
+<div class="row q-col-gutter-md">
+  <div class="col-12 col-md-8 q-gutter-y-md">
+
+    <!-- Keys Card -->
+    <q-card class="q-pa-sm">
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Keys</h5>
+          </div>
+          <div>
+            <q-btn
+              unelevated
+              color="primary"
+              icon="add"
+              label="Generate Key"
+              @click="generateKey()"
+              class="q-mr-sm"
+            ></q-btn>
+          </div>
+        </div>
+
+        <q-form @submit="importKey()" class="q-mb-md">
+          <div class="row q-gutter-sm items-end">
+            <q-input
+              dense
+              outlined
+              v-model="newKeyInput"
+              label="Import nsec or hex private key"
+              class="col"
+            ></q-input>
+            <q-btn
+              unelevated
+              color="secondary"
+              label="Import"
+              type="submit"
+              :disabled="!newKeyInput"
+            ></q-btn>
+          </div>
+        </q-form>
+
+        <q-table
+          dense
+          flat
+          :rows="keys"
+          :columns="keyCols"
+          row-key="id"
+          no-data-label="No keys yet. Import or generate one above."
+        >
+          <template v-slot:body-cell-pubkey_hex="props">
+            <q-td :props="props">
+              <span class="text-caption">{{ shortKey(props.row.pubkey_hex) }}</span>
+              <q-tooltip>{{ props.row.pubkey_hex }}</q-tooltip>
+            </q-td>
+          </template>
+          <template v-slot:body-cell-actions="props">
+            <q-td :props="props">
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="content_copy"
+                @click="copyText(props.row.pubkey_hex)"
+              >
+                <q-tooltip>Copy pubkey hex</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                size="sm"
+                color="red"
+                icon="delete"
+                @click="deleteKey(props.row.id)"
+              >
+                <q-tooltip>Delete key</q-tooltip>
+              </q-btn>
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+
+    <!-- Permissions Card -->
+    <q-card class="q-pa-sm">
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Permissions</h5>
+          </div>
+          <div>
+            <q-btn
+              unelevated
+              color="primary"
+              icon="add"
+              label="Add Permission"
+              @click="showPermDialog = true"
+              :disabled="keys.length === 0"
+            ></q-btn>
+          </div>
+        </div>
+
+        <q-table
+          dense
+          flat
+          :rows="permissions"
+          :columns="permCols"
+          row-key="id"
+          no-data-label="No permissions granted yet."
+        >
+          <template v-slot:body-cell-rate_limit="props">
+            <q-td :props="props">
+              <span v-if="props.row.rate_limit_count && props.row.rate_limit_seconds">
+                {{ props.row.rate_limit_count }} / {{ props.row.rate_limit_seconds }}s
+              </span>
+              <span v-else class="text-grey">Unlimited</span>
+            </q-td>
+          </template>
+          <template v-slot:body-cell-actions="props">
+            <q-td :props="props">
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="edit"
+                @click="editPermission(props.row)"
+              >
+                <q-tooltip>Edit rate limits</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                size="sm"
+                color="red"
+                icon="delete"
+                @click="deletePermission(props.row.id)"
+              >
+                <q-tooltip>Revoke permission</q-tooltip>
+              </q-btn>
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+
+    <!-- Signing Log Card -->
+    <q-card class="q-pa-sm">
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Signing Log</h5>
+          </div>
+          <div>
+            <q-btn
+              flat
+              dense
+              icon="refresh"
+              @click="getLogs()"
+            ></q-btn>
+          </div>
+        </div>
+
+        <q-table
+          dense
+          flat
+          :rows="logs"
+          :columns="logCols"
+          row-key="id"
+          no-data-label="No signing activity yet."
+        >
+          <template v-slot:body-cell-event_id="props">
+            <q-td :props="props">
+              <span class="text-caption">{{ shortKey(props.row.event_id) }}</span>
+              <q-tooltip>{{ props.row.event_id }}</q-tooltip>
+            </q-td>
+          </template>
+        </q-table>
+      </q-card-section>
+    </q-card>
+
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-12 col-md-4 q-gutter-y-md">
+    <q-card>
+      <q-card-section>
+        <h6 class="text-subtitle1 q-my-none">
+          {{SITE_TITLE}} Nsec Bunker
+        </h6>
+      </q-card-section>
+      <q-separator></q-separator>
+      <q-card-section>
+        <p>
+          A centralized Nostr key vault and signing oracle. Store your
+          Nostr private keys securely and grant other extensions
+          permission to sign specific event kinds.
+        </p>
+        <p>
+          <strong>Keys:</strong> Import an existing nsec (hex or bech32)
+          or generate a new keypair. Keys are encrypted at rest using
+          the server's secret key.
+        </p>
+        <p>
+          <strong>Permissions:</strong> Grant extensions permission to
+          sign specific Nostr event kinds. Each permission can have
+          optional rate limits.
+        </p>
+        <p>
+          <strong>Signing Log:</strong> An audit trail of all signing
+          operations performed through the Bunker.
+        </p>
+        <p class="text-warning">
+          Extensions call the Bunker's Python API to sign events.
+          No private key is ever exposed to consuming extensions.
+        </p>
+      </q-card-section>
+    </q-card>
+  </div>
+</div>
+
+<!-- Add Permission Dialog -->
+<q-dialog v-model="showPermDialog">
+  <q-card style="min-width: 400px">
+    <q-card-section>
+      <div class="text-h6">Add Permission</div>
+    </q-card-section>
+    <q-card-section>
+      <q-select
+        filled
+        dense
+        v-model="permForm.key_id"
+        :options="keyOptions"
+        label="Key"
+        emit-value
+        map-options
+        class="q-mb-md"
+      ></q-select>
+      <q-input
+        filled
+        dense
+        v-model="permForm.extension_id"
+        label="Extension ID (e.g. splitpayments)"
+        class="q-mb-md"
+      ></q-input>
+      <q-input
+        filled
+        dense
+        v-model.number="permForm.kind"
+        label="Event Kind (e.g. 9734)"
+        type="number"
+        class="q-mb-md"
+      ></q-input>
+      <q-input
+        filled
+        dense
+        v-model.number="permForm.rate_limit_count"
+        label="Rate Limit Count (optional)"
+        type="number"
+        class="q-mb-md"
+      ></q-input>
+      <q-input
+        filled
+        dense
+        v-model.number="permForm.rate_limit_seconds"
+        label="Rate Limit Window (seconds, optional)"
+        type="number"
+      ></q-input>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" v-close-popup></q-btn>
+      <q-btn
+        unelevated
+        color="primary"
+        label="Grant"
+        @click="createPermission()"
+      ></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+<!-- Edit Permission Dialog -->
+<q-dialog v-model="showEditPermDialog">
+  <q-card style="min-width: 400px">
+    <q-card-section>
+      <div class="text-h6">Edit Rate Limits</div>
+    </q-card-section>
+    <q-card-section>
+      <q-input
+        filled
+        dense
+        v-model.number="editPermForm.rate_limit_count"
+        label="Rate Limit Count"
+        type="number"
+        class="q-mb-md"
+      ></q-input>
+      <q-input
+        filled
+        dense
+        v-model.number="editPermForm.rate_limit_seconds"
+        label="Rate Limit Window (seconds)"
+        type="number"
+      ></q-input>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn flat label="Cancel" v-close-popup></q-btn>
+      <q-btn
+        unelevated
+        color="primary"
+        label="Save"
+        @click="updatePermission()"
+      ></q-btn>
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+
+{% endblock %} {% block scripts %} {{ window_vars(user) }}
+<script src="/nsecbunker/static/js/index.js"></script>
+{% endblock %}
