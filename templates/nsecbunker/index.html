@@ -246,59 +246,130 @@
 
 <!-- Add Permission Dialog -->
 <q-dialog v-model="showPermDialog">
-  <q-card style="min-width: 400px">
+  <q-card style="min-width: 500px">
     <q-card-section>
-      <div class="text-h6">Add Permission</div>
+      <div class="text-h6">Grant Signing Permission</div>
+      <div class="text-caption text-grey">
+        Allow an extension to sign a specific type of Nostr event using
+        one of your keys.
+      </div>
     </q-card-section>
     <q-card-section>
+      <!-- Key -->
       <q-select
         filled
         dense
         v-model="permForm.key_id"
         :options="keyOptions"
-        label="Key"
+        label="Which key should be used for signing?"
+        hint="The Nostr keypair this extension will sign events with."
         emit-value
         map-options
-        class="q-mb-md"
+        class="q-mb-lg"
       ></q-select>
-      <q-input
+
+      <!-- Extension -->
+      <q-select
         filled
         dense
         v-model="permForm.extension_id"
-        label="Extension ID (e.g. splitpayments)"
-        class="q-mb-md"
-      ></q-input>
-      <q-input
+        :options="extensionOptions"
+        label="Which extension needs to sign?"
+        hint="Choose the extension that will request signing."
+        option-label="label"
+        option-value="value"
+        emit-value
+        map-options
+        use-input
+        new-value-mode="add-unique"
+        class="q-mb-sm"
+      ></q-select>
+      <div
+        v-if="selectedExtDescription"
+        class="text-caption text-grey q-mb-lg q-pl-sm"
+        v-text="selectedExtDescription"
+      ></div>
+      <div v-else class="q-mb-md"></div>
+
+      <!-- Event Kind -->
+      <q-select
         filled
         dense
-        v-model.number="permForm.kind"
-        label="Event Kind (e.g. 9734)"
-        type="number"
-        class="q-mb-md"
-      ></q-input>
+        v-model="permForm.kind"
+        :options="kindOptions"
+        label="What type of event can it sign?"
+        hint="Each Nostr event kind represents a different action."
+        option-label="label"
+        option-value="value"
+        emit-value
+        map-options
+        class="q-mb-sm"
+      ></q-select>
+      <div
+        v-if="selectedKindDescription"
+        class="text-caption q-mb-sm q-pl-sm"
+        :class="selectedKindSensitive ? 'text-warning' : 'text-grey'"
+        v-text="selectedKindDescription"
+      ></div>
+      <q-banner
+        v-if="selectedKindSensitive"
+        dense
+        class="bg-warning text-white q-mb-lg"
+        rounded
+      >
+        This is a sensitive event kind. Granting permanent auto-sign
+        access means the extension can perform this action at any time
+        without your confirmation.
+      </q-banner>
+      <div v-else class="q-mb-md"></div>
+
+      <!-- Custom kind fallback -->
       <q-input
+        v-if="permForm.kind === null"
         filled
         dense
-        v-model.number="permForm.rate_limit_count"
-        label="Rate Limit Count (optional)"
+        v-model.number="permForm.customKind"
+        label="Or enter a custom kind number"
+        hint="If the kind you need isn't listed above, enter the NIP event kind number here."
         type="number"
-        class="q-mb-md"
+        class="q-mb-lg"
       ></q-input>
-      <q-input
-        filled
-        dense
-        v-model.number="permForm.rate_limit_seconds"
-        label="Rate Limit Window (seconds, optional)"
-        type="number"
-      ></q-input>
+
+      <!-- Rate Limiting -->
+      <div class="text-subtitle2 q-mb-xs">Rate Limiting (optional)</div>
+      <div class="text-caption text-grey q-mb-sm">
+        Restrict how often this extension can sign. Leave blank for
+        unlimited signing.
+      </div>
+      <div class="row q-gutter-sm">
+        <q-input
+          filled
+          dense
+          v-model.number="permForm.rate_limit_count"
+          label="Max signings"
+          hint="e.g. 100"
+          type="number"
+          class="col"
+        ></q-input>
+        <q-input
+          filled
+          dense
+          v-model.number="permForm.rate_limit_seconds"
+          label="Per seconds"
+          hint="e.g. 86400 (one day)"
+          type="number"
+          class="col"
+        ></q-input>
+      </div>
     </q-card-section>
     <q-card-actions align="right">
       <q-btn flat label="Cancel" v-close-popup></q-btn>
       <q-btn
         unelevated
         color="primary"
-        label="Grant"
+        label="Grant Permission"
         @click="createPermission()"
+        :disabled="!permForm.key_id || !permForm.extension_id"
       ></q-btn>
     </q-card-actions>
   </q-card>
