@@ -12,7 +12,7 @@ from .crud import (
 
 
 async def sign_event(
-    user_id: str,
+    wallet_id: str,
     extension_id: str,
     unsigned_event: dict,
     key_id: str | None = None,
@@ -21,33 +21,33 @@ async def sign_event(
     Sign a Nostr event using the Bunker.
 
     Args:
-        user_id: LNBits account ID
+        wallet_id: LNBits wallet ID
         extension_id: Machine name of the calling extension
         unsigned_event: Dict with kind, tags, content (pubkey optional)
-        key_id: Specific key ID to use (optional, defaults to user's first key)
+        key_id: Specific key ID to use (optional, defaults to wallet's first key)
 
     Returns:
         Complete signed event dict with id and sig fields added.
 
     Raises:
         PermissionError: Extension lacks permission for this event kind.
-        LookupError: No key configured for this user.
+        LookupError: No key configured for this wallet.
     """
     # 1. Get key
     if key_id:
         key = await get_key(key_id)
-        if not key or key.user_id != user_id:
-            raise LookupError(f"Key {key_id} not found for user")
+        if not key or key.wallet != wallet_id:
+            raise LookupError(f"Key {key_id} not found for wallet")
     else:
-        keys = await get_keys(user_id)
+        keys = await get_keys(wallet_id)
         if not keys:
-            raise LookupError("No keys configured for this user")
+            raise LookupError("No keys configured for this wallet")
         key = keys[0]
 
     kind = unsigned_event.get("kind", 1)
 
     # 2. Check permission
-    perm = await get_permission_for_signing(user_id, extension_id, kind)
+    perm = await get_permission_for_signing(wallet_id, extension_id, kind)
     if not perm:
         raise PermissionError(
             f"Extension '{extension_id}' lacks permission for kind {kind}"
@@ -92,14 +92,16 @@ async def sign_event(
     return signed
 
 
-async def get_user_pubkey(user_id: str, key_id: str | None = None) -> str | None:
-    """Get a user's public key hex."""
+async def get_wallet_pubkey(
+    wallet_id: str, key_id: str | None = None
+) -> str | None:
+    """Get a wallet's public key hex."""
     if key_id:
         key = await get_key(key_id)
-        if key and key.user_id == user_id:
+        if key and key.wallet == wallet_id:
             return key.pubkey_hex
         return None
-    keys = await get_keys(user_id)
+    keys = await get_keys(wallet_id)
     if keys:
         return keys[0].pubkey_hex
     return None

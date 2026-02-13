@@ -23,7 +23,7 @@ db = Database("ext_nsecbunker")
 # --- Keys ---
 
 
-async def create_key(user_id: str, data: CreateKeyData) -> BunkerKey:
+async def create_key(wallet_id: str, data: CreateKeyData) -> BunkerKey:
     private_key = parse_nostr_private_key(data.private_key)
     private_key_hex = private_key.hex()
     pubkey_hex = private_key.public_key.hex()
@@ -31,7 +31,7 @@ async def create_key(user_id: str, data: CreateKeyData) -> BunkerKey:
 
     key = BunkerKey(
         id=urlsafe_short_hash(),
-        user_id=user_id,
+        wallet=wallet_id,
         pubkey_hex=pubkey_hex,
         encrypted_nsec=encrypted_nsec or "",
         created_at=datetime.now(timezone.utc),
@@ -40,10 +40,11 @@ async def create_key(user_id: str, data: CreateKeyData) -> BunkerKey:
     return key
 
 
-async def get_keys(user_id: str) -> list[BunkerKey]:
+async def get_keys(wallet_id: str) -> list[BunkerKey]:
     return await db.fetchall(
-        "SELECT * FROM nsecbunker.keys WHERE user_id = :user_id ORDER BY created_at DESC",
-        {"user_id": user_id},
+        "SELECT * FROM nsecbunker.keys WHERE wallet = :wallet "
+        "ORDER BY created_at DESC",
+        {"wallet": wallet_id},
         BunkerKey,
     )
 
@@ -78,11 +79,11 @@ async def get_decrypted_private_key(key_id: str) -> str:
 
 
 async def create_permission(
-    user_id: str, data: CreatePermissionData
+    wallet_id: str, data: CreatePermissionData
 ) -> BunkerPermission:
     perm = BunkerPermission(
         id=urlsafe_short_hash(),
-        user_id=user_id,
+        wallet=wallet_id,
         extension_id=data.extension_id,
         key_id=data.key_id,
         kind=data.kind,
@@ -94,11 +95,11 @@ async def create_permission(
     return perm
 
 
-async def get_permissions(user_id: str) -> list[BunkerPermission]:
+async def get_permissions(wallet_id: str) -> list[BunkerPermission]:
     return await db.fetchall(
-        "SELECT * FROM nsecbunker.permissions WHERE user_id = :user_id "
+        "SELECT * FROM nsecbunker.permissions WHERE wallet = :wallet "
         "ORDER BY created_at DESC",
-        {"user_id": user_id},
+        {"wallet": wallet_id},
         BunkerPermission,
     )
 
@@ -112,12 +113,13 @@ async def get_permission(perm_id: str) -> BunkerPermission | None:
 
 
 async def get_permission_for_signing(
-    user_id: str, extension_id: str, kind: int
+    wallet_id: str, extension_id: str, kind: int
 ) -> BunkerPermission | None:
     return await db.fetchone(
         "SELECT * FROM nsecbunker.permissions "
-        "WHERE user_id = :user_id AND extension_id = :extension_id AND kind = :kind",
-        {"user_id": user_id, "extension_id": extension_id, "kind": kind},
+        "WHERE wallet = :wallet AND extension_id = :extension_id "
+        "AND kind = :kind",
+        {"wallet": wallet_id, "extension_id": extension_id, "kind": kind},
         BunkerPermission,
     )
 
@@ -176,13 +178,13 @@ async def create_signing_log(
     return log
 
 
-async def get_signing_logs(user_id: str, limit: int = 50) -> list[SigningLog]:
+async def get_signing_logs(wallet_id: str, limit: int = 50) -> list[SigningLog]:
     return await db.fetchall(
         "SELECT sl.* FROM nsecbunker.signing_log sl "
         "JOIN nsecbunker.keys k ON sl.key_id = k.id "
-        "WHERE k.user_id = :user_id "
+        "WHERE k.wallet = :wallet "
         "ORDER BY sl.created_at DESC LIMIT :limit",
-        {"user_id": user_id, "limit": limit},
+        {"wallet": wallet_id, "limit": limit},
         SigningLog,
     )
 

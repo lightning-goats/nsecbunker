@@ -3,6 +3,25 @@
 <div class="row q-col-gutter-md">
   <div class="col-12 col-md-8 q-gutter-y-md">
 
+    <!-- Wallet Selector -->
+    <q-card class="q-pa-sm">
+      <q-card-section class="q-pa-none">
+        <div class="row items-center no-wrap q-gutter-sm">
+          <div class="col">
+            <q-select
+              filled
+              dense
+              :options="g.user.wallets"
+              v-model="selectedWallet"
+              label="Wallet:"
+              option-label="name"
+            >
+            </q-select>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+
     <!-- Keys Card -->
     <q-card class="q-pa-sm">
       <q-card-section>
@@ -196,6 +215,11 @@
           A centralized Nostr key vault and signing oracle. Store your
           Nostr private keys securely and grant other extensions
           permission to sign specific event kinds.
+        </p>
+        <p>
+          <strong>Wallet:</strong> Select the wallet to manage keys and
+          permissions for. Each wallet has its own independent set of
+          keys and permissions.
         </p>
         <p>
           <strong>Keys:</strong> Import an existing nsec (hex or bech32)

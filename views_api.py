@@ -50,7 +50,7 @@ async def api_create_key(
             detail="Invalid Nostr private key.",
         ) from exc
 
-    key = await create_key(wallet.wallet.user, data)
+    key = await create_key(wallet.wallet.id, data)
     # Don't return the encrypted nsec in the response
     key.encrypted_nsec = ""
     return key
@@ -60,7 +60,7 @@ async def api_create_key(
 async def api_get_keys(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> list[BunkerKey]:
-    keys = await get_keys(wallet.wallet.user)
+    keys = await get_keys(wallet.wallet.id)
     # Strip encrypted secrets from response
     for key in keys:
         key.encrypted_nsec = ""
@@ -90,7 +90,7 @@ async def api_generate_key(
 ) -> BunkerKey:
     private_key = PrivateKey()
     data = CreateKeyData(private_key=private_key.hex())
-    key = await create_key(wallet.wallet.user, data)
+    key = await create_key(wallet.wallet.id, data)
     key.encrypted_nsec = ""
     return key
 
@@ -105,14 +105,14 @@ async def api_create_permission(
     data: CreatePermissionData,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> BunkerPermission:
-    return await create_permission(wallet.wallet.user, data)
+    return await create_permission(wallet.wallet.id, data)
 
 
 @nsecbunker_api_router.get("/api/v1/permissions")
 async def api_get_permissions(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> list[BunkerPermission]:
-    return await get_permissions(wallet.wallet.user)
+    return await get_permissions(wallet.wallet.id)
 
 
 @nsecbunker_api_router.put(
@@ -152,7 +152,7 @@ async def api_sign_event(
 ) -> dict:
     try:
         signed = await sign_event(
-            user_id=wallet.wallet.user,
+            wallet_id=wallet.wallet.id,
             extension_id=data.extension_id,
             unsigned_event=data.event,
         )
@@ -188,4 +188,4 @@ async def api_sign_event(
 async def api_get_logs(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> list[SigningLog]:
-    return await get_signing_logs(wallet.wallet.user)
+    return await get_signing_logs(wallet.wallet.id)

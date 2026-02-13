@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class BunkerKey(BaseModel):
     id: str
-    user_id: str
+    wallet: str
     pubkey_hex: str
     encrypted_nsec: str
     created_at: datetime
@@ -14,7 +14,7 @@ class BunkerKey(BaseModel):
 
 class BunkerPermission(BaseModel):
     id: str
-    user_id: str
+    wallet: str
     extension_id: str
     key_id: str
     kind: int

@@ -1,8 +1,16 @@
 window.app = Vue.createApp({
   el: '#vue',
   mixins: [windowMixin],
+  watch: {
+    selectedWallet() {
+      this.getKeys()
+      this.getPermissions()
+      this.getLogs()
+    }
+  },
   data() {
     return {
+      selectedWallet: null,
       keys: [],
       permissions: [],
       logs: [],
@@ -92,14 +100,15 @@ window.app = Vue.createApp({
         Quasar.Notify.create({message: 'Copied!', timeout: 500})
       })
     },
-    adminKey() {
-      return this.g.user.wallets[0].adminkey
-    },
 
     // --- Keys ---
     getKeys() {
       LNbits.api
-        .request('GET', '/nsecbunker/api/v1/keys', this.adminKey())
+        .request(
+          'GET',
+          '/nsecbunker/api/v1/keys',
+          this.selectedWallet.adminkey
+        )
         .then(response => {
           this.keys = response.data
         })
@@ -109,9 +118,12 @@ window.app = Vue.createApp({
     },
     importKey() {
       LNbits.api
-        .request('POST', '/nsecbunker/api/v1/keys', this.adminKey(), {
-          private_key: this.newKeyInput
-        })
+        .request(
+          'POST',
+          '/nsecbunker/api/v1/keys',
+          this.selectedWallet.adminkey,
+          {private_key: this.newKeyInput}
+        )
         .then(response => {
           this.newKeyInput = ''
           this.getKeys()
@@ -126,7 +138,11 @@ window.app = Vue.createApp({
     },
     generateKey() {
       LNbits.api
-        .request('POST', '/nsecbunker/api/v1/keys/generate', this.adminKey())
+        .request(
+          'POST',
+          '/nsecbunker/api/v1/keys/generate',
+          this.selectedWallet.adminkey
+        )
         .then(response => {
           this.getKeys()
           Quasar.Notify.create({
@@ -148,7 +164,7 @@ window.app = Vue.createApp({
             .request(
               'DELETE',
               '/nsecbunker/api/v1/keys/' + keyId,
-              this.adminKey()
+              this.selectedWallet.adminkey
             )
             .then(() => {
               this.getKeys()
@@ -164,7 +180,11 @@ window.app = Vue.createApp({
     // --- Permissions ---
     getPermissions() {
       LNbits.api
-        .request('GET', '/nsecbunker/api/v1/permissions', this.adminKey())
+        .request(
+          'GET',
+          '/nsecbunker/api/v1/permissions',
+          this.selectedWallet.adminkey
+        )
         .then(response => {
           this.permissions = response.data
         })
@@ -177,7 +197,7 @@ window.app = Vue.createApp({
         .request(
           'POST',
           '/nsecbunker/api/v1/permissions',
-          this.adminKey(),
+          this.selectedWallet.adminkey,
           this.permForm
         )
         .then(response => {
@@ -212,7 +232,7 @@ window.app = Vue.createApp({
         .request(
           'PUT',
           '/nsecbunker/api/v1/permissions/' + this.editPermForm.id,
-          this.adminKey(),
+          this.selectedWallet.adminkey,
           {
             rate_limit_count: this.editPermForm.rate_limit_count,
             rate_limit_seconds: this.editPermForm.rate_limit_seconds
@@ -236,7 +256,7 @@ window.app = Vue.createApp({
           .request(
             'DELETE',
             '/nsecbunker/api/v1/permissions/' + permId,
-            this.adminKey()
+            this.selectedWallet.adminkey
           )
           .then(() => {
             this.getPermissions()
@@ -254,7 +274,11 @@ window.app = Vue.createApp({
     // --- Logs ---
     getLogs() {
       LNbits.api
-        .request('GET', '/nsecbunker/api/v1/log', this.adminKey())
+        .request(
+          'GET',
+          '/nsecbunker/api/v1/log',
+          this.selectedWallet.adminkey
+        )
         .then(response => {
           this.logs = response.data
         })
@@ -264,8 +288,6 @@ window.app = Vue.createApp({
     }
   },
   created() {
-    this.getKeys()
-    this.getPermissions()
-    this.getLogs()
+    this.selectedWallet = this.g.user.wallets[0]
   }
 })
