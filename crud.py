@@ -36,13 +36,13 @@ async def create_key(user_id: str, data: CreateKeyData) -> BunkerKey:
         encrypted_nsec=encrypted_nsec or "",
         created_at=datetime.now(timezone.utc),
     )
-    await db.insert("bunker.keys", key)
+    await db.insert("nsecbunker.keys", key)
     return key
 
 
 async def get_keys(user_id: str) -> list[BunkerKey]:
     return await db.fetchall(
-        "SELECT * FROM bunker.keys WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM nsecbunker.keys WHERE user_id = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
         BunkerKey,
     )
@@ -50,7 +50,7 @@ async def get_keys(user_id: str) -> list[BunkerKey]:
 
 async def get_key(key_id: str) -> BunkerKey | None:
     return await db.fetchone(
-        "SELECT * FROM bunker.keys WHERE id = :id",
+        "SELECT * FROM nsecbunker.keys WHERE id = :id",
         {"id": key_id},
         BunkerKey,
     )
@@ -58,7 +58,7 @@ async def get_key(key_id: str) -> BunkerKey | None:
 
 async def delete_key(key_id: str) -> None:
     await db.execute(
-        "DELETE FROM bunker.keys WHERE id = :id",
+        "DELETE FROM nsecbunker.keys WHERE id = :id",
         {"id": key_id},
     )
 
@@ -90,13 +90,13 @@ async def create_permission(
         rate_limit_seconds=data.rate_limit_seconds,
         created_at=datetime.now(timezone.utc),
     )
-    await db.insert("bunker.permissions", perm)
+    await db.insert("nsecbunker.permissions", perm)
     return perm
 
 
 async def get_permissions(user_id: str) -> list[BunkerPermission]:
     return await db.fetchall(
-        "SELECT * FROM bunker.permissions WHERE user_id = :user_id "
+        "SELECT * FROM nsecbunker.permissions WHERE user_id = :user_id "
         "ORDER BY created_at DESC",
         {"user_id": user_id},
         BunkerPermission,
@@ -105,7 +105,7 @@ async def get_permissions(user_id: str) -> list[BunkerPermission]:
 
 async def get_permission(perm_id: str) -> BunkerPermission | None:
     return await db.fetchone(
-        "SELECT * FROM bunker.permissions WHERE id = :id",
+        "SELECT * FROM nsecbunker.permissions WHERE id = :id",
         {"id": perm_id},
         BunkerPermission,
     )
@@ -115,7 +115,7 @@ async def get_permission_for_signing(
     user_id: str, extension_id: str, kind: int
 ) -> BunkerPermission | None:
     return await db.fetchone(
-        "SELECT * FROM bunker.permissions "
+        "SELECT * FROM nsecbunker.permissions "
         "WHERE user_id = :user_id AND extension_id = :extension_id AND kind = :kind",
         {"user_id": user_id, "extension_id": extension_id, "kind": kind},
         BunkerPermission,
@@ -129,7 +129,7 @@ async def update_permission(
     if not perm:
         raise LookupError(f"Permission {perm_id} not found")
     await db.execute(
-        "UPDATE bunker.permissions "
+        "UPDATE nsecbunker.permissions "
         "SET rate_limit_count = :rate_limit_count, "
         "rate_limit_seconds = :rate_limit_seconds "
         "WHERE id = :id",
@@ -146,14 +146,14 @@ async def update_permission(
 
 async def delete_permission(perm_id: str) -> None:
     await db.execute(
-        "DELETE FROM bunker.permissions WHERE id = :id",
+        "DELETE FROM nsecbunker.permissions WHERE id = :id",
         {"id": perm_id},
     )
 
 
 async def delete_permissions_for_key(key_id: str) -> None:
     await db.execute(
-        "DELETE FROM bunker.permissions WHERE key_id = :key_id",
+        "DELETE FROM nsecbunker.permissions WHERE key_id = :key_id",
         {"key_id": key_id},
     )
 
@@ -172,14 +172,14 @@ async def create_signing_log(
         event_id=event_id,
         created_at=datetime.now(timezone.utc),
     )
-    await db.insert("bunker.signing_log", log)
+    await db.insert("nsecbunker.signing_log", log)
     return log
 
 
 async def get_signing_logs(user_id: str, limit: int = 50) -> list[SigningLog]:
     return await db.fetchall(
-        "SELECT sl.* FROM bunker.signing_log sl "
-        "JOIN bunker.keys k ON sl.key_id = k.id "
+        "SELECT sl.* FROM nsecbunker.signing_log sl "
+        "JOIN nsecbunker.keys k ON sl.key_id = k.id "
         "WHERE k.user_id = :user_id "
         "ORDER BY sl.created_at DESC LIMIT :limit",
         {"user_id": user_id, "limit": limit},
@@ -194,7 +194,7 @@ async def count_recent_signings(
 
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
     result = await db.fetchone(
-        "SELECT COUNT(*) as count FROM bunker.signing_log "
+        "SELECT COUNT(*) as count FROM nsecbunker.signing_log "
         "WHERE key_id = :key_id AND extension_id = :extension_id "
         "AND kind = :kind AND created_at > :cutoff",
         {

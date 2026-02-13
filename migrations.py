@@ -7,7 +7,7 @@ async def m001_initial(db: Connection):
     """
     await db.execute(
         """
-        CREATE TABLE bunker.keys (
+        CREATE TABLE nsecbunker.keys (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             pubkey_hex TEXT NOT NULL,
@@ -19,7 +19,7 @@ async def m001_initial(db: Connection):
 
     await db.execute(
         """
-        CREATE TABLE bunker.permissions (
+        CREATE TABLE nsecbunker.permissions (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             extension_id TEXT NOT NULL,
@@ -35,13 +35,13 @@ async def m001_initial(db: Connection):
     await db.execute(
         """
         CREATE INDEX idx_permissions_user_ext
-        ON bunker.permissions (user_id, extension_id, kind);
+        ON nsecbunker.permissions (user_id, extension_id, kind);
         """
     )
 
     await db.execute(
         """
-        CREATE TABLE bunker.signing_log (
+        CREATE TABLE nsecbunker.signing_log (
             id TEXT PRIMARY KEY,
             key_id TEXT NOT NULL,
             extension_id TEXT NOT NULL,
