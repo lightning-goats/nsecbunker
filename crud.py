@@ -192,18 +192,19 @@ async def get_signing_logs(wallet_id: str, limit: int = 50) -> list[SigningLog]:
 async def count_recent_signings(
     key_id: str, extension_id: str, kind: int, seconds: int
 ) -> int:
-    from datetime import timedelta
+    import time
 
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+    cutoff_ts = int(time.time() - seconds)
     result = await db.fetchone(
-        "SELECT COUNT(*) as count FROM nsecbunker.signing_log "
-        "WHERE key_id = :key_id AND extension_id = :extension_id "
-        "AND kind = :kind AND created_at > :cutoff",
+        f"SELECT COUNT(*) as count FROM nsecbunker.signing_log "
+        f"WHERE key_id = :key_id AND extension_id = :extension_id "
+        f"AND kind = :kind "
+        f"AND created_at > {db.timestamp_placeholder('cutoff_ts')}",
         {
             "key_id": key_id,
             "extension_id": extension_id,
             "kind": kind,
-            "cutoff": cutoff,
+            "cutoff_ts": cutoff_ts,
         },
     )
     return result[0] if result else 0

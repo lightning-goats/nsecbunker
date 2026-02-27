@@ -12,7 +12,9 @@ from .crud import (
     delete_key,
     delete_permission,
     delete_permissions_for_key,
+    get_key,
     get_keys,
+    get_permission,
     get_permissions,
     get_signing_logs,
     update_permission,
@@ -76,6 +78,15 @@ async def api_delete_key(
     key_id: str,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> None:
+    key = await get_key(key_id)
+    if not key:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Key not found."
+        )
+    if key.wallet != wallet.wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your key."
+        )
     # Cascade: delete permissions first, then the key
     await delete_permissions_for_key(key_id)
     await delete_key(key_id)
@@ -125,13 +136,16 @@ async def api_update_permission(
     data: UpdatePermissionData,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> BunkerPermission:
-    try:
-        return await update_permission(perm_id, data)
-    except LookupError as exc:
+    perm = await get_permission(perm_id)
+    if not perm:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=str(exc),
-        ) from exc
+            status_code=HTTPStatus.NOT_FOUND, detail="Permission not found."
+        )
+    if perm.wallet != wallet.wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your permission."
+        )
+    return await update_permission(perm_id, data)
 
 
 @nsecbunker_api_router.delete(
@@ -141,6 +155,15 @@ async def api_delete_permission(
     perm_id: str,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ) -> None:
+    perm = await get_permission(perm_id)
+    if not perm:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Permission not found."
+        )
+    if perm.wallet != wallet.wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your permission."
+        )
     await delete_permission(perm_id)
 
 
