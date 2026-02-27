@@ -121,3 +121,8 @@ async def m002_wallet_scoping(db: Connection):
         ON nsecbunker.permissions (wallet, extension_id, kind);
         """
     )
+
+
+async def m003_key_labels(db: Connection):
+    """Add optional human-readable label to keys."""
+    await db.execute("ALTER TABLE nsecbunker.keys ADD COLUMN label TEXT")

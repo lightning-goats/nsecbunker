@@ -54,6 +54,11 @@ window.app = Vue.createApp({
       newKeyInput: '',
       showPermDialog: false,
       showEditPermDialog: false,
+      showEditKeyDialog: false,
+      editKeyForm: {
+        id: null,
+        label: ''
+      },
       kindOptions: KIND_OPTIONS,
       permForm: {
         key_id: null,
@@ -69,6 +74,12 @@ window.app = Vue.createApp({
         rate_limit_seconds: null
       },
       keyCols: [
+        {
+          name: 'label',
+          label: 'Label',
+          field: 'label',
+          align: 'left'
+        },
         {
           name: 'pubkey_hex',
           label: 'Public Key',
@@ -136,13 +147,22 @@ window.app = Vue.createApp({
           }
         },
         {name: 'event_id', label: 'Event ID', align: 'left'}
-      ]
+      ],
+      logPagination: {
+        sortBy: 'created_at',
+        descending: true,
+        page: 1,
+        rowsPerPage: 20,
+        rowsNumber: 0
+      }
     }
   },
   computed: {
     keyOptions() {
       return this.keys.map(k => ({
-        label: this.shortKey(k.pubkey_hex),
+        label: k.label
+          ? k.label + ' - ' + this.shortKey(k.pubkey_hex)
+          : this.shortKey(k.pubkey_hex),
         value: k.id
       }))
     },
@@ -312,6 +332,33 @@ window.app = Vue.createApp({
             })
         })
     },
+    editKey(key) {
+      this.editKeyForm = {
+        id: key.id,
+        label: key.label || ''
+      }
+      this.showEditKeyDialog = true
+    },
+    updateKey() {
+      LNbits.api
+        .request(
+          'PUT',
+          '/nsecbunker/api/v1/keys/' + this.editKeyForm.id,
+          this.selectedWallet.adminkey,
+          {label: this.editKeyForm.label || null}
+        )
+        .then(response => {
+          this.showEditKeyDialog = false
+          this.getKeys()
+          Quasar.Notify.create({
+            message: 'Key updated.',
+            timeout: 700
+          })
+        })
+        .catch(err => {
+          LNbits.utils.notifyApiError(err)
+        })
+    },
 
     // --- Permissions ---
     getPermissions() {
@@ -429,15 +476,22 @@ window.app = Vue.createApp({
     },
 
     // --- Logs ---
-    getLogs() {
+    getLogs(props) {
+      var pagination = (props && props.pagination) || this.logPagination
+      var page = pagination.page || 1
+      var rowsPerPage = pagination.rowsPerPage || 20
+      var offset = (page - 1) * rowsPerPage
       LNbits.api
         .request(
           'GET',
-          '/nsecbunker/api/v1/log',
+          '/nsecbunker/api/v1/log?offset=' + offset + '&limit=' + rowsPerPage,
           this.selectedWallet.adminkey
         )
         .then(response => {
-          this.logs = response.data
+          this.logs = response.data.data
+          this.logPagination = Object.assign({}, pagination, {
+            rowsNumber: response.data.total
+          })
         })
         .catch(err => {
           LNbits.utils.notifyApiError(err)

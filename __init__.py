@@ -1,6 +1,11 @@
+import asyncio
+
 from fastapi import APIRouter
 
+from lnbits.tasks import create_permanent_unique_task
+
 from .crud import db
+from .tasks import cleanup_old_signing_logs
 from .views import nsecbunker_generic_router
 from .views_api import nsecbunker_api_router
 
@@ -14,13 +19,22 @@ nsecbunker_ext: APIRouter = APIRouter(prefix="/nsecbunker", tags=["nsecbunker"])
 nsecbunker_ext.include_router(nsecbunker_generic_router)
 nsecbunker_ext.include_router(nsecbunker_api_router)
 
+scheduled_tasks: list[asyncio.Task] = []
+
 
 def nsecbunker_stop():
-    pass
+    for task in scheduled_tasks:
+        try:
+            task.cancel()
+        except Exception:
+            pass
 
 
 def nsecbunker_start():
-    pass
+    task = create_permanent_unique_task(
+        "ext_nsecbunker_log_cleanup", cleanup_old_signing_logs
+    )
+    scheduled_tasks.append(task)
 
 
 __all__ = [

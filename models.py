@@ -9,6 +9,7 @@ class BunkerKey(BaseModel):
     wallet: str
     pubkey_hex: str
     encrypted_nsec: str
+    label: Optional[str] = None
     created_at: datetime
 
 
@@ -34,6 +35,7 @@ class SigningLog(BaseModel):
 
 class CreateKeyData(BaseModel):
     private_key: str
+    label: Optional[str] = None
 
 
 class CreatePermissionData(BaseModel):
@@ -58,3 +60,31 @@ class QuickSetupData(BaseModel):
 class SignEventData(BaseModel):
     extension_id: str
     event: dict
+
+
+class UpdateKeyData(BaseModel):
+    label: Optional[str] = None
+
+
+class Nip04EncryptData(BaseModel):
+    key_id: str
+    pubkey: str
+    plaintext: str
+
+
+class Nip04DecryptData(BaseModel):
+    key_id: str
+    pubkey: str
+    ciphertext: str
+
+
+class Nip44EncryptData(BaseModel):
+    key_id: str
+    pubkey: str
+    plaintext: str
+
+
+class Nip44DecryptData(BaseModel):
+    key_id: str
+    pubkey: str
+    payload: str

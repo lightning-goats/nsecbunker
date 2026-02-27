@@ -10,6 +10,21 @@ from .crud import (
     get_permission_for_signing,
 )
 
+try:
+    from nostr_sdk import (
+        Nip44Version,
+        PublicKey as NsPK,
+        SecretKey as NsSK,
+        nip04_encrypt as _nip04_enc,
+        nip04_decrypt as _nip04_dec,
+        nip44_encrypt as _nip44_enc,
+        nip44_decrypt as _nip44_dec,
+    )
+
+    _HAS_NOSTR_SDK = True
+except ImportError:
+    _HAS_NOSTR_SDK = False
+
 
 async def sign_event(
     wallet_id: str,
@@ -105,3 +120,74 @@ async def get_wallet_pubkey(
     if keys:
         return keys[0].pubkey_hex
     return None
+
+
+async def _get_owned_key(wallet_id: str, key_id: str):
+    key = await get_key(key_id)
+    if not key or key.wallet != wallet_id:
+        raise LookupError(f"Key {key_id} not found for wallet")
+    return key
+
+
+async def nip04_encrypt(
+    wallet_id: str, key_id: str, recipient_pubkey: str, plaintext: str
+) -> str:
+    if not _HAS_NOSTR_SDK:
+        raise RuntimeError("nostr_sdk is not installed")
+    key = await _get_owned_key(wallet_id, key_id)
+    private_key_hex = await get_decrypted_private_key(key.id)
+    sk = NsSK.parse(private_key_hex)
+    pk = NsPK.parse(recipient_pubkey)
+    result = _nip04_enc(sk, pk, plaintext)
+    logger.info(
+        f"nsecbunker: nip04_encrypt for key {key.id[:8]}..."
+    )
+    return result
+
+
+async def nip04_decrypt(
+    wallet_id: str, key_id: str, sender_pubkey: str, ciphertext: str
+) -> str:
+    if not _HAS_NOSTR_SDK:
+        raise RuntimeError("nostr_sdk is not installed")
+    key = await _get_owned_key(wallet_id, key_id)
+    private_key_hex = await get_decrypted_private_key(key.id)
+    sk = NsSK.parse(private_key_hex)
+    pk = NsPK.parse(sender_pubkey)
+    result = _nip04_dec(sk, pk, ciphertext)
+    logger.info(
+        f"nsecbunker: nip04_decrypt for key {key.id[:8]}..."
+    )
+    return result
+
+
+async def nip44_encrypt(
+    wallet_id: str, key_id: str, recipient_pubkey: str, plaintext: str
+) -> str:
+    if not _HAS_NOSTR_SDK:
+        raise RuntimeError("nostr_sdk is not installed")
+    key = await _get_owned_key(wallet_id, key_id)
+    private_key_hex = await get_decrypted_private_key(key.id)
+    sk = NsSK.parse(private_key_hex)
+    pk = NsPK.parse(recipient_pubkey)
+    result = _nip44_enc(sk, pk, plaintext, Nip44Version.V2)
+    logger.info(
+        f"nsecbunker: nip44_encrypt for key {key.id[:8]}..."
+    )
+    return result
+
+
+async def nip44_decrypt(
+    wallet_id: str, key_id: str, sender_pubkey: str, payload: str
+) -> str:
+    if not _HAS_NOSTR_SDK:
+        raise RuntimeError("nostr_sdk is not installed")
+    key = await _get_owned_key(wallet_id, key_id)
+    private_key_hex = await get_decrypted_private_key(key.id)
+    sk = NsSK.parse(private_key_hex)
+    pk = NsPK.parse(sender_pubkey)
+    result = _nip44_dec(sk, pk, payload)
+    logger.info(
+        f"nsecbunker: nip44_decrypt for key {key.id[:8]}..."
+    )
+    return result

@@ -7,16 +7,19 @@ from loguru import logger
 from pynostr.key import PrivateKey
 
 from .crud import (
+    count_signing_logs,
     create_key,
     create_permission,
     delete_key,
     delete_permission,
     delete_permissions_for_key,
+    get_decrypted_private_key,
     get_key,
     get_keys,
     get_permission,
     get_permissions,
     get_signing_logs,
+    update_key,
     update_permission,
 )
 from .discovery import discover_signing_requirements
@@ -26,12 +29,24 @@ from .models import (
     BunkerPermission,
     CreateKeyData,
     CreatePermissionData,
+    Nip04DecryptData,
+    Nip04EncryptData,
+    Nip44DecryptData,
+    Nip44EncryptData,
     QuickSetupData,
     SignEventData,
     SigningLog,
+    UpdateKeyData,
     UpdatePermissionData,
 )
-from .services import sign_event
+from .services import (
+    get_wallet_pubkey,
+    nip04_decrypt,
+    nip04_encrypt,
+    nip44_decrypt,
+    nip44_encrypt,
+    sign_event,
+)
 
 nsecbunker_api_router = APIRouter()
 
@@ -106,6 +121,49 @@ async def api_generate_key(
     key = await create_key(wallet.wallet.id, data)
     key.encrypted_nsec = ""
     return key
+
+
+@nsecbunker_api_router.put(
+    "/api/v1/keys/{key_id}", status_code=HTTPStatus.OK
+)
+async def api_update_key(
+    key_id: str,
+    data: UpdateKeyData,
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+) -> BunkerKey:
+    key = await get_key(key_id)
+    if not key:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Key not found."
+        )
+    if key.wallet != wallet.wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your key."
+        )
+    updated = await update_key(key_id, data)
+    updated.encrypted_nsec = ""
+    return updated
+
+
+@nsecbunker_api_router.get(
+    "/api/v1/keys/{key_id}/export", status_code=HTTPStatus.OK
+)
+async def api_export_key(
+    key_id: str,
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+) -> dict:
+    key = await get_key(key_id)
+    if not key:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Key not found."
+        )
+    if key.wallet != wallet.wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your key."
+        )
+    private_key_hex = await get_decrypted_private_key(key_id)
+    pk = PrivateKey(bytes.fromhex(private_key_hex))
+    return {"private_key_hex": private_key_hex, "nsec": pk.nsec}
 
 
 # --- Permissions ---
@@ -251,6 +309,117 @@ async def api_quick_setup(
     return created
 
 
+# --- Public Key ---
+
+
+@nsecbunker_api_router.get("/api/v1/pubkey")
+async def api_get_pubkey(
+    key_id: str | None = None,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+) -> dict:
+    pubkey = await get_wallet_pubkey(wallet.wallet.id, key_id)
+    if not pubkey:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail="No key found for this wallet.",
+        )
+    return {"pubkey_hex": pubkey}
+
+
+# --- NIP-04 ---
+
+
+@nsecbunker_api_router.post("/api/v1/nip04/encrypt")
+async def api_nip04_encrypt(
+    data: Nip04EncryptData,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+) -> dict:
+    try:
+        result = await nip04_encrypt(
+            wallet.wallet.id, data.key_id, data.pubkey, data.plaintext
+        )
+        return {"ciphertext": result}
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        logger.error(f"nsecbunker: nip04_encrypt failed: {exc}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Encryption failed.",
+        ) from exc
+
+
+@nsecbunker_api_router.post("/api/v1/nip04/decrypt")
+async def api_nip04_decrypt(
+    data: Nip04DecryptData,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+) -> dict:
+    try:
+        result = await nip04_decrypt(
+            wallet.wallet.id, data.key_id, data.pubkey, data.ciphertext
+        )
+        return {"plaintext": result}
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        logger.error(f"nsecbunker: nip04_decrypt failed: {exc}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Decryption failed.",
+        ) from exc
+
+
+# --- NIP-44 ---
+
+
+@nsecbunker_api_router.post("/api/v1/nip44/encrypt")
+async def api_nip44_encrypt(
+    data: Nip44EncryptData,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+) -> dict:
+    try:
+        result = await nip44_encrypt(
+            wallet.wallet.id, data.key_id, data.pubkey, data.plaintext
+        )
+        return {"payload": result}
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        logger.error(f"nsecbunker: nip44_encrypt failed: {exc}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Encryption failed.",
+        ) from exc
+
+
+@nsecbunker_api_router.post("/api/v1/nip44/decrypt")
+async def api_nip44_decrypt(
+    data: Nip44DecryptData,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+) -> dict:
+    try:
+        result = await nip44_decrypt(
+            wallet.wallet.id, data.key_id, data.pubkey, data.payload
+        )
+        return {"plaintext": result}
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        logger.error(f"nsecbunker: nip44_decrypt failed: {exc}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Decryption failed.",
+        ) from exc
+
+
 # --- Sign ---
 
 
@@ -295,6 +464,10 @@ async def api_sign_event(
 
 @nsecbunker_api_router.get("/api/v1/log")
 async def api_get_logs(
+    offset: int = 0,
+    limit: int = 50,
     wallet: WalletTypeInfo = Depends(require_admin_key),
-) -> list[SigningLog]:
-    return await get_signing_logs(wallet.wallet.id)
+) -> dict:
+    logs = await get_signing_logs(wallet.wallet.id, limit=limit, offset=offset)
+    total = await count_signing_logs(wallet.wallet.id)
+    return {"data": logs, "total": total}

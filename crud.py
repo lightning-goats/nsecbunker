@@ -14,6 +14,7 @@ from .models import (
     CreateKeyData,
     CreatePermissionData,
     SigningLog,
+    UpdateKeyData,
     UpdatePermissionData,
 )
 
@@ -34,6 +35,7 @@ async def create_key(wallet_id: str, data: CreateKeyData) -> BunkerKey:
         wallet=wallet_id,
         pubkey_hex=pubkey_hex,
         encrypted_nsec=encrypted_nsec or "",
+        label=data.label,
         created_at=datetime.now(timezone.utc),
     )
     await db.insert("nsecbunker.keys", key)
@@ -62,6 +64,19 @@ async def delete_key(key_id: str) -> None:
         "DELETE FROM nsecbunker.keys WHERE id = :id",
         {"id": key_id},
     )
+
+
+async def update_key(key_id: str, data: UpdateKeyData) -> BunkerKey:
+    key = await get_key(key_id)
+    if not key:
+        raise LookupError(f"Key {key_id} not found")
+    await db.execute(
+        "UPDATE nsecbunker.keys SET label = :label WHERE id = :id",
+        {"id": key_id, "label": data.label},
+    )
+    updated = await get_key(key_id)
+    assert updated is not None
+    return updated
 
 
 async def get_decrypted_private_key(key_id: str) -> str:
@@ -178,14 +193,37 @@ async def create_signing_log(
     return log
 
 
-async def get_signing_logs(wallet_id: str, limit: int = 50) -> list[SigningLog]:
+async def get_signing_logs(
+    wallet_id: str, limit: int = 50, offset: int = 0
+) -> list[SigningLog]:
     return await db.fetchall(
         "SELECT sl.* FROM nsecbunker.signing_log sl "
         "JOIN nsecbunker.keys k ON sl.key_id = k.id "
         "WHERE k.wallet = :wallet "
-        "ORDER BY sl.created_at DESC LIMIT :limit",
-        {"wallet": wallet_id, "limit": limit},
+        "ORDER BY sl.created_at DESC LIMIT :limit OFFSET :offset",
+        {"wallet": wallet_id, "limit": limit, "offset": offset},
         SigningLog,
+    )
+
+
+async def count_signing_logs(wallet_id: str) -> int:
+    result = await db.fetchone(
+        "SELECT COUNT(*) as count FROM nsecbunker.signing_log sl "
+        "JOIN nsecbunker.keys k ON sl.key_id = k.id "
+        "WHERE k.wallet = :wallet",
+        {"wallet": wallet_id},
+    )
+    return result["count"] if result else 0
+
+
+async def delete_old_signing_logs(retention_days: int = 30) -> None:
+    import time
+
+    cutoff_ts = int(time.time() - retention_days * 86400)
+    await db.execute(
+        f"DELETE FROM nsecbunker.signing_log "
+        f"WHERE created_at < {db.timestamp_placeholder('cutoff_ts')}",
+        {"cutoff_ts": cutoff_ts},
     )
 
 
@@ -207,4 +245,4 @@ async def count_recent_signings(
             "cutoff_ts": cutoff_ts,
         },
     )
-    return result[0] if result else 0
+    return result["count"] if result else 0
