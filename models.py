@@ -11,6 +11,7 @@ class BunkerKey(BaseModel):
     encrypted_nsec: str
     label: Optional[str] = None
     created_at: datetime
+    stored: bool = False
 
 
 class BunkerPermission(BaseModel):
@@ -22,6 +23,7 @@ class BunkerPermission(BaseModel):
     rate_limit_count: Optional[int] = None
     rate_limit_seconds: Optional[int] = None
     created_at: datetime
+    stored: bool = False
 
 
 class SigningLog(BaseModel):
@@ -31,6 +33,7 @@ class SigningLog(BaseModel):
     kind: int
     event_id: str
     created_at: datetime
+    stored: bool = False
 
 
 class CreateKeyData(BaseModel):
