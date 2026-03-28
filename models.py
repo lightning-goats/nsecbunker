@@ -1,11 +1,12 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class BunkerKey(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    class Config:
+        extra = "ignore"
 
     id: str
     wallet: str
@@ -16,7 +17,8 @@ class BunkerKey(BaseModel):
 
 
 class BunkerPermission(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    class Config:
+        extra = "ignore"
 
     id: str
     wallet: str
@@ -29,7 +31,8 @@ class BunkerPermission(BaseModel):
 
 
 class SigningLog(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    class Config:
+        extra = "ignore"
 
     id: str
     key_id: str
