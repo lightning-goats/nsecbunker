@@ -90,7 +90,7 @@ async def sign_event(
         kind=kind,
         tags=tags,
         content=content,
-        public_key=key.pubkey_hex,
+        pubkey=key.pubkey_hex,
     )
     event.sign(private_key_hex)
     signed = event.to_dict()
