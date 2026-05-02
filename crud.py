@@ -96,6 +96,10 @@ async def get_decrypted_private_key(key_id: str) -> str:
 async def create_permission(
     wallet_id: str, data: CreatePermissionData
 ) -> BunkerPermission:
+    key = await get_key(data.key_id)
+    if not key or key.wallet != wallet_id:
+        raise LookupError(f"Key {data.key_id} not found for wallet")
+
     perm = BunkerPermission(
         id=urlsafe_short_hash(),
         wallet=wallet_id,

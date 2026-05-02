@@ -13,6 +13,26 @@ class BunkerKey(BaseModel):
     created_at: datetime
 
 
+class PublicBunkerKey(BaseModel):
+    id: str
+    wallet: str
+    pubkey_hex: str
+    label: Optional[str] = None
+    created_at: datetime
+    stored: bool
+
+    @classmethod
+    def from_bunker_key(cls, key: BunkerKey) -> "PublicBunkerKey":
+        return cls(
+            id=key.id,
+            wallet=key.wallet,
+            pubkey_hex=key.pubkey_hex,
+            label=key.label,
+            created_at=key.created_at,
+            stored=bool(key.encrypted_nsec),
+        )
+
+
 class BunkerPermission(BaseModel):
     id: str
     wallet: str

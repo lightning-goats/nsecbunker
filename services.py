@@ -1,3 +1,5 @@
+import asyncio
+
 from loguru import logger
 from pynostr.event import Event
 
@@ -7,7 +9,7 @@ from .crud import (
     get_decrypted_private_key,
     get_key,
     get_keys,
-    get_permission_for_signing,
+    get_permissions,
 )
 
 try:
@@ -24,6 +26,18 @@ try:
     _HAS_NOSTR_SDK = True
 except ImportError:
     _HAS_NOSTR_SDK = False
+
+
+_signing_locks: dict[tuple[str, str, int], asyncio.Lock] = {}
+
+
+def _get_signing_lock(key_id: str, extension_id: str, kind: int) -> asyncio.Lock:
+    lock_key = (key_id, extension_id, kind)
+    lock = _signing_locks.get(lock_key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _signing_locks[lock_key] = lock
+    return lock
 
 
 async def sign_event(
@@ -48,7 +62,7 @@ async def sign_event(
         PermissionError: Extension lacks permission for this event kind.
         LookupError: No key configured for this wallet.
     """
-    # 1. Get key
+    # 1. Resolve the target key first.
     if key_id:
         key = await get_key(key_id)
         if not key or key.wallet != wallet_id:
@@ -61,43 +75,53 @@ async def sign_event(
 
     kind = unsigned_event.get("kind", 1)
 
-    # 2. Check permission
-    perm = await get_permission_for_signing(wallet_id, extension_id, kind)
+    # 2. Check permission for the specific key being used.
+    perm = next(
+        (
+            candidate
+            for candidate in await get_permissions(wallet_id)
+            if candidate.key_id == key.id
+            and candidate.extension_id == extension_id
+            and candidate.kind == kind
+        ),
+        None,
+    )
     if not perm:
         raise PermissionError(
-            f"Extension '{extension_id}' lacks permission for kind {kind}"
+            f"Extension '{extension_id}' lacks permission for key {key.id} and kind {kind}"
         )
 
-    # 3. Check rate limit
-    if perm.rate_limit_count and perm.rate_limit_seconds:
-        recent = await count_recent_signings(
-            key.id, extension_id, kind, perm.rate_limit_seconds
-        )
-        if recent >= perm.rate_limit_count:
-            raise PermissionError(
-                f"Rate limit exceeded: {perm.rate_limit_count} "
-                f"per {perm.rate_limit_seconds}s"
+    async with _get_signing_lock(key.id, extension_id, kind):
+        # 3. Check rate limit
+        if perm.rate_limit_count and perm.rate_limit_seconds:
+            recent = await count_recent_signings(
+                key.id, extension_id, kind, perm.rate_limit_seconds
             )
+            if recent >= perm.rate_limit_count:
+                raise PermissionError(
+                    f"Rate limit exceeded: {perm.rate_limit_count} "
+                    f"per {perm.rate_limit_seconds}s"
+                )
 
-    # 4. Decrypt key
-    private_key_hex = await get_decrypted_private_key(key.id)
+        # 4. Decrypt key
+        private_key_hex = await get_decrypted_private_key(key.id)
 
-    # 5. Sign event
-    tags = unsigned_event.get("tags", [])
-    content = unsigned_event.get("content", "")
+        # 5. Sign event
+        tags = unsigned_event.get("tags", [])
+        content = unsigned_event.get("content", "")
 
-    event = Event(
-        kind=kind,
-        tags=tags,
-        content=content,
-        public_key=key.pubkey_hex,
-    )
-    event.sign(private_key_hex)
-    signed = event.to_dict()
+        event = Event(
+            kind=kind,
+            tags=tags,
+            content=content,
+            pubkey=key.pubkey_hex,
+        )
+        event.sign(private_key_hex)
+        signed = event.to_dict()
 
-    # 6. Log signing
-    event_id = signed.get("id", "")
-    await create_signing_log(key.id, extension_id, kind, event_id)
+        # 6. Log signing before releasing the rate-limit lock.
+        event_id = signed.get("id", "")
+        await create_signing_log(key.id, extension_id, kind, event_id)
     logger.info(
         f"nsecbunker: signed kind:{kind} for {extension_id} "
         f"(key {key.id[:8]}..., event {event_id[:12]}...)"

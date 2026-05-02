@@ -6,7 +6,7 @@ A Nostr key vault and signing oracle for [LNbits](https://github.com/lnbits/lnbi
 
 - **Centralized key management** -- Keep one (or several) Nostr identities on your LNbits instance instead of pasting nsecs into every extension that needs to publish events.
 - **Extension signing oracle** -- Extensions like CyberHerd, Split Payments, or LNURLp request signing through the Bunker's internal Python API. They never see the private key.
-- **External API consumer** -- Any HTTP client with a valid wallet key can call the REST endpoints to sign events, encrypt/decrypt messages, or retrieve public keys -- useful for bots, bridges, and automation scripts.
+- **External API consumer** -- Any HTTP client with a valid admin wallet key can call the REST endpoints to sign events or encrypt/decrypt messages; invoice wallet keys can retrieve public keys.
 - **NIP-04 / NIP-44 encrypted messaging** -- Encrypt and decrypt direct messages without exposing keys to the calling application.
 - **Key backup and migration** -- Export a key as hex or nsec via the admin-only export endpoint, then import it on another instance.
 - **Multi-wallet isolation** -- Each LNbits wallet has its own independent set of keys and permissions, so different projects or users on the same instance stay separated.
@@ -42,7 +42,7 @@ All endpoints are prefixed with `/nsecbunker`. Authentication uses LNbits wallet
 |--------|----------|-------------|
 | `GET` | `/api/v1/pubkey?key_id=` | Get public key hex (defaults to wallet's first key) |
 
-### Signing (invoice key)
+### Signing (admin key)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -60,7 +60,7 @@ Request body:
 }
 ```
 
-### NIP-04 Encrypt / Decrypt (invoice key)
+### NIP-04 Encrypt / Decrypt (admin key)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -85,7 +85,7 @@ Request body (decrypt):
 }
 ```
 
-### NIP-44 Encrypt / Decrypt (invoice key)
+### NIP-44 Encrypt / Decrypt (admin key)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -180,7 +180,7 @@ A log cleanup task runs hourly and removes signing log entries older than 30 day
 - Private keys are encrypted at rest using `encrypt_internal_message()` (LNbits server secret + AES).
 - The plaintext key is only held in memory during a sign/encrypt/decrypt operation.
 - **Admin key** is required to manage keys, permissions, and view logs.
-- **Invoice key** is sufficient for signing and encrypt/decrypt operations (the same trust level as spending sats from the wallet).
+- **Admin key** is required for signing and encrypt/decrypt REST operations. Invoice keys can retrieve public keys only.
 - Each wallet's keys and permissions are fully isolated from other wallets.
 - The export endpoint is admin-key-only and is intended for backup purposes.
 - Signing is gated by per-extension, per-kind permissions with optional rate limits.
