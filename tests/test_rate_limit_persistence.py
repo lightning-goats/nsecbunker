@@ -99,3 +99,80 @@ def test_rate_limit_check_and_log_are_one_database_operation(tmp_path):
             await test_db.engine.dispose()
 
     asyncio.run(run_test())
+
+
+def test_postgres_atomic_insert_binds_datetime(monkeypatch):
+    from contextlib import asynccontextmanager
+
+    class Result:
+        rowcount = 1
+
+        def scalar_one(self):
+            return 0
+
+    class Transaction:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    class RawConnection:
+        inserted_values = None
+
+        def begin(self):
+            return Transaction()
+
+        async def execute(self, statement, values):
+            if str(statement).startswith("INSERT INTO nsecbunker.signing_log"):
+                self.inserted_values = values
+            return Result()
+
+    class Connection:
+        type = "POSTGRES"
+
+        def __init__(self):
+            self.conn = RawConnection()
+
+        def rewrite_query(self, query):
+            return query
+
+        def rewrite_values(self, values):
+            converted = {}
+            for key, value in values.items():
+                converted[key] = (
+                    value.timestamp() if isinstance(value, datetime) else value
+                )
+            return converted
+
+    class PostgresDatabase:
+        def __init__(self):
+            self.connection = Connection()
+
+        @asynccontextmanager
+        async def connect(self):
+            yield self.connection
+
+        def timestamp_placeholder(self, key):
+            return f"to_timestamp(:{key})"
+
+    async def run_test():
+        test_db = PostgresDatabase()
+        monkeypatch.setattr(crud, "db", test_db)
+
+        result = await crud.create_rate_limited_signing_log(
+            "permission-1",
+            "key-1",
+            "consumer",
+            1,
+            "event-1",
+            1,
+            60,
+        )
+
+        assert result is not None
+        created_at = test_db.connection.conn.inserted_values["created_at"]
+        assert isinstance(created_at, datetime)
+        assert created_at.tzinfo is None
+
+    asyncio.run(run_test())

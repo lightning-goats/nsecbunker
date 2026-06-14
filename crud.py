@@ -199,6 +199,15 @@ async def create_signing_log(
     return log
 
 
+def _signing_log_values(log: SigningLog, database_type: str) -> dict:
+    values = log.dict()
+    if database_type in {"POSTGRES", "COCKROACH"}:
+        values["created_at"] = log.created_at.replace(tzinfo=None)
+    else:
+        values["created_at"] = log.created_at.timestamp()
+    return values
+
+
 async def create_rate_limited_signing_log(
     permission_id: str,
     key_id: str,
@@ -265,7 +274,7 @@ async def create_rate_limited_signing_log(
                         ":event_id, :created_at)"
                     )
                 ),
-                conn.rewrite_values(log.dict()),
+                _signing_log_values(log, conn.type),
             )
 
     return log
