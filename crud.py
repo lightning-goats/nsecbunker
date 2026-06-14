@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import text
+
 from lnbits.db import Database
 from lnbits.helpers import (
     decrypt_internal_message,
@@ -197,6 +199,78 @@ async def create_signing_log(
     return log
 
 
+async def create_rate_limited_signing_log(
+    permission_id: str,
+    key_id: str,
+    extension_id: str,
+    kind: int,
+    event_id: str,
+    rate_limit_count: int,
+    rate_limit_seconds: int,
+) -> SigningLog | None:
+    """Atomically reserve a rate-limit slot and record the signing."""
+    import time
+
+    log = SigningLog(
+        id=urlsafe_short_hash(),
+        key_id=key_id,
+        extension_id=extension_id,
+        kind=kind,
+        event_id=event_id,
+        created_at=datetime.now(timezone.utc),
+    )
+    cutoff_ts = int(time.time() - rate_limit_seconds)
+
+    async with db.connect() as conn:
+        async with conn.conn.begin():
+            lock_result = await conn.conn.execute(
+                text(
+                    conn.rewrite_query(
+                        "UPDATE nsecbunker.permissions SET id = id WHERE id = :id"
+                    )
+                ),
+                conn.rewrite_values({"id": permission_id}),
+            )
+            if lock_result.rowcount != 1:
+                return None
+
+            count_result = await conn.conn.execute(
+                text(
+                    conn.rewrite_query(
+                        "SELECT COUNT(*) FROM nsecbunker.signing_log "  # noqa: S608
+                        "WHERE key_id = :key_id AND extension_id = :extension_id "
+                        "AND kind = :kind AND created_at > "
+                        f"{db.timestamp_placeholder('cutoff_ts')}"
+                    )
+                ),
+                conn.rewrite_values(
+                    {
+                        "key_id": key_id,
+                        "extension_id": extension_id,
+                        "kind": kind,
+                        "cutoff_ts": cutoff_ts,
+                    }
+                ),
+            )
+            recent = int(count_result.scalar_one())
+            if recent >= rate_limit_count:
+                return None
+
+            await conn.conn.execute(
+                text(
+                    conn.rewrite_query(
+                        "INSERT INTO nsecbunker.signing_log "
+                        "(id, key_id, extension_id, kind, event_id, created_at) "
+                        "VALUES (:id, :key_id, :extension_id, :kind, "
+                        ":event_id, :created_at)"
+                    )
+                ),
+                conn.rewrite_values(log.dict()),
+            )
+
+    return log
+
+
 async def get_signing_logs(
     wallet_id: str, limit: int = 50, offset: int = 0
 ) -> list[SigningLog]:
@@ -225,28 +299,7 @@ async def delete_old_signing_logs(retention_days: int = 30) -> None:
 
     cutoff_ts = int(time.time() - retention_days * 86400)
     await db.execute(
-        f"DELETE FROM nsecbunker.signing_log "
+        f"DELETE FROM nsecbunker.signing_log "  # noqa: S608
         f"WHERE created_at < {db.timestamp_placeholder('cutoff_ts')}",
         {"cutoff_ts": cutoff_ts},
     )
-
-
-async def count_recent_signings(
-    key_id: str, extension_id: str, kind: int, seconds: int
-) -> int:
-    import time
-
-    cutoff_ts = int(time.time() - seconds)
-    result = await db.fetchone(
-        f"SELECT COUNT(*) as count FROM nsecbunker.signing_log "
-        f"WHERE key_id = :key_id AND extension_id = :extension_id "
-        f"AND kind = :kind "
-        f"AND created_at > {db.timestamp_placeholder('cutoff_ts')}",
-        {
-            "key_id": key_id,
-            "extension_id": extension_id,
-            "kind": kind,
-            "cutoff_ts": cutoff_ts,
-        },
-    )
-    return result["count"] if result else 0

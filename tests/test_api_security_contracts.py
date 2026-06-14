@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import inspect
 import sys
@@ -129,3 +130,73 @@ def test_high_impact_rest_operations_require_admin_key():
     assert _wallet_dependency(views_api.api_nip04_decrypt) is require_admin_key
     assert _wallet_dependency(views_api.api_nip44_encrypt) is require_admin_key
     assert _wallet_dependency(views_api.api_nip44_decrypt) is require_admin_key
+
+
+def test_sign_endpoint_forwards_requested_key_id():
+    views_api, _ = _load_views_api_module()
+    calls = []
+
+    async def sign_event(**kwargs):
+        calls.append(kwargs)
+        return {"id": "event-id"}
+
+    views_api.sign_event = sign_event
+    data = views_api.SignEventData(
+        extension_id="consumer",
+        key_id="key-2",
+        event={"kind": 1},
+    )
+    wallet = SimpleNamespace(wallet=SimpleNamespace(id="wallet-1"))
+
+    asyncio.run(views_api.api_sign_event(data=data, wallet=wallet))
+
+    assert calls == [
+        {
+            "wallet_id": "wallet-1",
+            "extension_id": "consumer",
+            "unsigned_event": {"kind": 1},
+            "key_id": "key-2",
+        }
+    ]
+
+
+def test_discovery_checks_permissions_for_default_key():
+    views_api, _ = _load_views_api_module()
+
+    async def get_keys(wallet_id):
+        return [
+            SimpleNamespace(id="new-key"),
+            SimpleNamespace(id="old-key"),
+        ]
+
+    async def get_permissions(wallet_id):
+        return [
+            SimpleNamespace(
+                extension_id="consumer",
+                key_id="old-key",
+                kind=1,
+            )
+        ]
+
+    views_api.get_keys = get_keys
+    views_api.get_permissions = get_permissions
+    views_api.discover_signing_requirements = lambda: [
+        SimpleNamespace(
+            extension_id="consumer",
+            extension_name="Consumer",
+            requirements=[
+                SimpleNamespace(
+                    kind=1,
+                    kind_label="Text Note",
+                    description="Publish notes",
+                    required=True,
+                    recommended_rate_limit=None,
+                )
+            ],
+        )
+    ]
+    wallet = SimpleNamespace(wallet=SimpleNamespace(id="wallet-1"))
+
+    discovered = asyncio.run(views_api.api_discover(wallet=wallet))
+
+    assert discovered[0]["requirements"][0]["already_granted"] is False

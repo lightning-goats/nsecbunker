@@ -52,6 +52,7 @@ Request body:
 ```json
 {
   "extension_id": "cyberherd",
+  "key_id": "abc123",
   "event": {
     "kind": 1,
     "content": "Hello Nostr!",
@@ -118,7 +119,7 @@ NIP-44 endpoints require the `nostr_sdk` Python package to be installed.
 |--------|----------|-------------|
 | `POST` | `/api/v1/permissions` | Grant a signing permission |
 | `GET` | `/api/v1/permissions` | List all permissions |
-| `PUT` | `/api/v1/permissions/{id}` | Update rate limits |
+| `PUT` | `/api/v1/permissions/{id}` | Update or clear a positive count/seconds rate-limit pair |
 | `DELETE` | `/api/v1/permissions/{id}` | Revoke a permission |
 
 ### Discovery & Quick Setup (admin key)
@@ -147,8 +148,11 @@ signed = await sign_event(
     wallet_id="...",
     extension_id="myextension",
     unsigned_event={"kind": 1, "content": "Hello", "tags": []},
+    key_id="abc123",
 )
 ```
+
+The `key_id` field is optional and defaults to the wallet's newest permitted key. Supplying it is recommended for wallets with multiple keys.
 
 The same pattern works for `nip04_encrypt`, `nip04_decrypt`, `nip44_encrypt`, `nip44_decrypt`, and `get_wallet_pubkey`.
 

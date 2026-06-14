@@ -1,7 +1,26 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
+
+
+def _validate_rate_limit_pair(values: dict, require_update: bool = False) -> dict:
+    count_set = "rate_limit_count" in values
+    seconds_set = "rate_limit_seconds" in values
+
+    if require_update and not count_set and not seconds_set:
+        raise ValueError("Rate limit update must include both fields")
+    if count_set != seconds_set:
+        raise ValueError("Rate limit count and seconds must be provided together")
+
+    count = values.get("rate_limit_count")
+    seconds = values.get("rate_limit_seconds")
+    if count is None and seconds is None:
+        return values
+    if count is None or seconds is None or count <= 0 or seconds <= 0:
+        raise ValueError("Rate limit count and seconds must be positive integers")
+    return values
+
 
 
 class BunkerKey(BaseModel):
@@ -71,13 +90,21 @@ class CreatePermissionData(BaseModel):
     extension_id: str
     key_id: str
     kind: int
-    rate_limit_count: Optional[int] = None
-    rate_limit_seconds: Optional[int] = None
+    rate_limit_count: int | None = None
+    rate_limit_seconds: int | None = None
+
+    @root_validator(pre=True, allow_reuse=True)
+    def validate_rate_limit(cls, values):
+        return _validate_rate_limit_pair(values)
 
 
 class UpdatePermissionData(BaseModel):
-    rate_limit_count: Optional[int] = None
-    rate_limit_seconds: Optional[int] = None
+    rate_limit_count: int | None = None
+    rate_limit_seconds: int | None = None
+
+    @root_validator(pre=True, allow_reuse=True)
+    def validate_rate_limit(cls, values):
+        return _validate_rate_limit_pair(values, require_update=True)
 
 
 class QuickSetupData(BaseModel):
@@ -89,6 +116,7 @@ class QuickSetupData(BaseModel):
 class SignEventData(BaseModel):
     extension_id: str
     event: dict
+    key_id: str | None = None
 
 
 class UpdateKeyData(BaseModel):

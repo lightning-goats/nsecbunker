@@ -245,9 +245,13 @@ async def api_discover(
 ) -> list[dict]:
     discovered = discover_signing_requirements()
     existing = await get_permissions(wallet.wallet.id)
+    keys = await get_keys(wallet.wallet.id)
+    default_key_id = keys[0].id if keys else None
 
     granted_set = {
-        (p.extension_id, p.kind) for p in existing
+        (p.extension_id, p.kind)
+        for p in existing
+        if p.key_id == default_key_id
     }
 
     result = []
@@ -462,6 +466,7 @@ async def api_sign_event(
             wallet_id=wallet.wallet.id,
             extension_id=data.extension_id,
             unsigned_event=data.event,
+            key_id=data.key_id,
         )
         return {"event": signed}
     except LookupError as exc:

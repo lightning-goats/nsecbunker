@@ -167,12 +167,12 @@ window.app = Vue.createApp({
       }))
     },
     selectedKindSensitive() {
-      if (!this.permForm.kind) return false
+      if (this.permForm.kind === null) return false
       var k = KIND_MAP[this.permForm.kind]
       return k ? k.sensitive : false
     },
     selectedKindDescription() {
-      if (!this.permForm.kind) return ''
+      if (this.permForm.kind === null) return ''
       var k = KIND_MAP[this.permForm.kind]
       return k ? k.description : ''
     },
